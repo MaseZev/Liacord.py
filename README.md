@@ -20,8 +20,6 @@ Installing
 
 **Python 3.8 or higher is required**
 
-To install the library without full voice support, you can just run the following command:
-
     # Linux/macOS
     python3 -m pip install -U Liacord
 
