@@ -1,7 +1,10 @@
 import asyncio
+
 import aiohttp
+
 from .context import Context
-from .intents import Intents
+from .embed import EmbedBuilder
+
 
 class Client:
     class Guild:
@@ -31,6 +34,9 @@ class Client:
             self.max_members = guild_info['max_members']
             self.max_video_channel_users = guild_info['max_video_channel_users']
 
+    STATUS_TYPES = ['online', 'idle', 'dnd', 'invisible']
+    ACTIVITY_TYPES = ['playing', 'streaming', 'listening', 'watching']
+
     def __init__(self, token, prefix="!", intents=0):
         self.prefix = prefix
         self.token = token
@@ -41,20 +47,19 @@ class Client:
         self.latency = None
         self.guild = None
 
-    async def get_payload(self, op):
+    async def get_payload(self, op, text=None):
         payload = {
             'op': op,
-            "d": {
-                "token": self.token,
-                "properties": {
-                    "$os": "windows",
-                    "$browser": "chrome",
-                    "$device": 'pc'
+            'd': {
+                'token': self.token,
+                'properties': {
+                    '$os': 'windows',
+                    '$browser': 'chrome',
+                    '$device': 'pc'
                 }
             }
         }
         return payload
-
     async def close(self):
         await self.session.close()
 
@@ -80,6 +85,17 @@ class Client:
             print(f'Error fetching channel: {e}')
             return None
 
+    async def fetch_channel_context(self, channel_id):
+        url = f'{self.client.base_url}/channels/{channel_id}'
+        headers = {'Authorization': f'Bot {self.client.token}'}
+        try:
+            async with self.client.session.get(url, headers=headers) as response:
+                response.raise_for_status()
+                return await response.json()
+        except aiohttp.ClientResponseError as e:
+            print(f'Error fetching channel: {e}')
+            return None
+
     async def fetch_guild(self, guild_id):
         url = f'{self.base_url}/guilds/{guild_id}'
         headers = {'Authorization': f'Bot {self.token}'}
@@ -94,23 +110,77 @@ class Client:
     async def send(self, ctx, content=None, *, tts=False, embed=None, delete_after=None,
                    nonce=None, allowed_mentions=None):
         url = f'{self.base_url}/channels/{ctx.channel.id}/messages'
-        print(url)
-        headers = {'Authorization': f'Bot {self.token}'}
+        headers = {'Authorization': f'Bot {self.token}', 'Content-Type': 'application/json'}
+
         payload = {
             'content': content,
             'tts': tts,
-            'embed': embed,
             'nonce': nonce,
             'allowed_mentions': allowed_mentions
         }
 
+        if embed:
+            if isinstance(embed, EmbedBuilder):
+                payload['embeds'] = [embed.to_dict()]
+            else:
+                raise ValueError("Embed must be an instance of EmbedBuilder")
+
         try:
             async with self.session.post(url, headers=headers, json=payload) as response:
                 response.raise_for_status()
-                return await response.json()
+                message_data = await response.json()
+
+                if delete_after:
+                    await asyncio.sleep(delete_after)
+                    delete_url = f"{self.base_url}/channels/{ctx.channel.id}/messages/{message_data['id']}"
+                    async with self.session.delete(delete_url, headers=headers) as delete_response:
+                        delete_response.raise_for_status()
+
+                return message_data
         except aiohttp.ClientResponseError as e:
             print(f'Error sending message: {e}')
             return None
+
+    async def delete_message(self, ctx, message_id):
+        if not isinstance(ctx, Context):
+            raise ValueError("ctx must be an instance of Context")
+        if not isinstance(message_id, str):
+            raise ValueError("message_id must be a string")
+
+        url = f'{self.base_url}/channels/{ctx.channel.id}/messages/{message_id}'
+        headers = {'Authorization': f'Bot {self.token}'}
+
+        try:
+            async with self.session.delete(url, headers=headers) as response:
+                response.raise_for_status()
+        except aiohttp.ClientResponseError as e:
+            print(f'Error deleting message: {e}')
+
+    async def edit_message(self, ctx, message_id, content=None, embed=None):
+        if not isinstance(ctx, Context):
+            raise ValueError("ctx must be an instance of Context")
+        if not isinstance(message_id, str):
+            raise ValueError("message_id must be a string")
+
+        url = f'{self.base_url}/channels/{ctx.channel.id}/messages/{message_id}'
+        headers = {'Authorization': f'Bot {self.token}', 'Content-Type': 'application/json'}
+
+        payload = {}
+        if content:
+            if not isinstance(content, str):
+                raise ValueError("content must be a string")
+            payload['content'] = content
+        if embed:
+            if not isinstance(embed, EmbedBuilder):
+                raise ValueError("embed must be an instance of EmbedBuilder")
+            payload['embed'] = embed.to_dict()
+
+        try:
+            async with self.session.patch(url, headers=headers, json=payload) as response:
+                response.raise_for_status()
+                return await response.json()
+        except aiohttp.ClientResponseError as e:
+            print(f'Error editing message: {e}')
 
     async def on_message(self, message):
         if 'guild_id' in message:
@@ -129,7 +199,6 @@ class Client:
                     data = msg.json()
                     if data['op'] == 10:
                         self.latency = data['d']['heartbeat_interval'] / 1000
-                        await asyncio.sleep(self.latency)
                         payload = await self.get_payload(op=1)
                         await ws.send_json(payload)
                     elif data['op'] == 0:

@@ -15,40 +15,43 @@ Key Features
 - Proper rate limit handling.
 - Optimised in both speed and memory.
 
-Installing
-----------
-
 **Python 3.8 or higher is required**
 
-    # Linux/macOS
-    python3 -m pip install -U Liacord
+Installing
+~~~~~~~~~~~~~ py
 
-    # Windows
-    py -3 -m pip install -U Liacord
+# Linux/macOS
+python3 -m pip install -U Liacord
+
+# Windows
+py -3 -m pip install -U Liacord
+    
+~~~~~~~~~~~~~ 
 
 Bot Example
-~~~~~~~~~~~~~
+~~~~~~~~~~~~~ py
+
 import asyncio
- from Liacord import Client, Intents
- 
- intents = Intents().all()
- client = Client("your_token_here", prefix="#", intents=intents)
- 
- @client.command(name="name")
- async def hello(ctx):
-     await ctx.send(f"{ctx.author.name}")
- 
- @client.command(name="ping")
- async def ping(ctx):
-     await ctx.send(f"pong {round(client.latency)}ms.")
- 
- @client.command(name='server_id', brief='get the server id')
- async def server_id_command(ctx):
-     server_id = ctx.guild.id
-     await ctx.send(f"server id: {server_id}")
- 
- loop = asyncio.get_event_loop()
- loop.run_until_complete(client.run())
+from Liacord import Client, Intents
+
+intents = Intents().all()
+client = Client("your_token_here", prefix="#", intents=intents)
+
+@client.command(name="name")
+async def hello(ctx):
+ await ctx.send(f"{ctx.author.name}")
+
+@client.command(name="ping")
+async def ping(ctx):
+ await ctx.send(f"pong {round(client.latency)}ms.")
+
+@client.command(name='server_id', brief='get the server id')
+async def server_id_command(ctx):
+ server_id = ctx.guild.id
+ await ctx.send(f"server id: {server_id}")
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(client.run())
 ~~~~~~~~~~~~~
 You can find more examples in the examples directory [There](https://github.com/MaseZev/Liacord.py/tree/main/examples).
 
